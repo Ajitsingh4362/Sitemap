@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDP Bulk Finder — Client Edition</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050507;--s1:#0b0c10;--s2:#12131a;--b:#1e1f2b;--b2:#2a2b3d;
+  --g:#00e5a0;--g2:#00b8ff;--acc:#ff4d6d;--acc2:#ffd166;
+  --t:#e8eaf6;--m:#6b7099;--dim:#3d4063;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-height:100vh}
+
+/* HEADER */
+.hdr{padding:28px 32px 20px;border-bottom:1px solid var(--b);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;background:rgba(5,5,7,.92);backdrop-filter:blur(12px)}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;color:var(--g)}
+.logo span{color:var(--m)}
+.hdr-stat{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--m);text-align:right}
+.hdr-stat b{color:var(--g2)}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 61px)}
+
+/* SIDEBAR */
+.sidebar{border-right:1px solid var(--b);overflow-y:auto;background:var(--s1)}
+.sb-head{padding:14px 16px;border-bottom:1px solid var(--b);display:flex;align-items:center;justify-content:space-between}
+.sb-title{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--m);letter-spacing:2px;text-transform:uppercase}
+.sb-count{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g2)}
+
+.domain-row{display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:1px solid rgba(30,31,43,.7);cursor:pointer;transition:background .15s;position:relative}
+.domain-row:hover{background:var(--s2)}
+.domain-row.active{background:rgba(0,229,160,.05);border-left:2px solid var(--g)}
+.domain-row.running{background:rgba(0,184,255,.05)}
+.domain-row.done{opacity:.8}
+.domain-row.error{border-left:2px solid var(--acc)}
+
+.d-indicator{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--dim)}
+.domain-row.running .d-indicator{background:var(--g2);animation:pulse 1s ease-in-out infinite}
+.domain-row.done .d-indicator{background:var(--g)}
+.domain-row.error .d-indicator{background:var(--acc)}
+.domain-row.pending .d-indicator{background:var(--dim)}
+
+.d-info{flex:1;min-width:0}
+.d-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t)}
+.d-sub{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--m);margin-top:1px}
+.d-badge{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 6px;border-radius:3px;flex-shrink:0}
+.d-badge.count{background:rgba(0,229,160,.12);color:var(--g)}
+.d-badge.err{background:rgba(255,77,109,.12);color:var(--acc)}
+.d-badge.run{background:rgba(0,184,255,.12);color:var(--g2)}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* CONTROLS */
+.ctrl{padding:14px 16px;border-top:1px solid var(--b);position:sticky;bottom:0;background:var(--s1)}
+.btn-run{width:100%;padding:12px;background:var(--g);color:#000;border:none;border-radius:6px;font-family:'Barlow',sans-serif;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:all .2s}
+.btn-run:hover:not(:disabled){background:#00ffb3;transform:translateY(-1px)}
+.btn-run:disabled{background:var(--s2);color:var(--m);cursor:not-allowed}
+.btn-dl{width:100%;margin-top:8px;padding:10px;background:transparent;border:1px solid var(--g);color:var(--g);border-radius:6px;font-family:'Barlow',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-dl:hover{background:rgba(0,229,160,.1)}
+.btn-dl:disabled{opacity:.3;cursor:not-allowed}
+
+/* MAIN PANEL */
+.main{overflow-y:auto;background:var(--bg)}
+
+/* EMPTY STATE */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;color:var(--m)}
+.empty-icon{font-size:48px;opacity:.3}
+.empty-txt{font-family:'IBM Plex Mono',monospace;font-size:12px;text-align:center;line-height:1.8}
+
+/* DOMAIN DETAIL */
+.detail{padding:24px 28px}
+.det-head{margin-bottom:20px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.det-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1px;color:var(--t)}
+.det-title span{color:var(--g)}
+.det-meta{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--m);margin-top:4px;line-height:1.8}
+
+/* STATS ROW */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.stat-box{background:var(--s1);border:1px solid var(--b);border-radius:8px;padding:14px 16px}
+.stat-n{font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--g);line-height:1}
+.stat-l{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--m);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+.stat-box.warn .stat-n{color:var(--acc2)}
+.stat-box.err .stat-n{color:var(--acc)}
+
+/* PIPELINE */
+.pipeline{display:flex;gap:0;margin-bottom:20px;background:var(--s1);border:1px solid var(--b);border-radius:8px;overflow:hidden}
+.pip-step{flex:1;padding:12px 8px;text-align:center;border-right:1px solid var(--b);transition:all .2s}
+.pip-step:last-child{border-right:none}
+.pip-icon{font-size:18px;margin-bottom:4px}
+.pip-name{font-size:9px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.5px;font-family:'IBM Plex Mono',monospace}
+.pip-val{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g2);margin-top:3px}
+.pip-step.run{background:rgba(0,184,255,.06)}
+.pip-step.run .pip-icon{animation:bounce .5s ease-in-out infinite alternate}
+.pip-step.ok{background:rgba(0,229,160,.04)}
+.pip-step.ok .pip-name{color:var(--g)}
+.pip-step.fail .pip-name{color:var(--acc)}
+@keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-3px)}}
+
+/* PROGRESS */
+.prog-wrap{margin-bottom:16px;background:var(--s1);border:1px solid var(--b);border-radius:8px;padding:14px 16px;display:none}
+.prog-top{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--m);margin-bottom:8px}
+.prog-bar{height:2px;background:var(--b2);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--g),var(--g2));width:0%;transition:width .4s;border-radius:2px}
+
+/* LOG */
+.log-wrap{background:#02030a;border:1px solid var(--b);border-radius:8px;overflow:hidden;margin-bottom:20px;display:none}
+.log-head{display:flex;align-items:center;gap:5px;padding:7px 12px;border-bottom:1px solid var(--b);background:var(--s1)}
+.dot{width:7px;height:7px;border-radius:50%}
+.log-body{padding:10px 12px;max-height:160px;overflow-y:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:2}
+.log-line{display:flex;gap:8px}
+.log-ts{color:var(--dim);flex-shrink:0}
+.log-msg{word-break:break-all}
+.log-i .log-msg{color:#7ecfff}.log-s .log-msg{color:var(--g)}.log-w .log-msg{color:var(--acc2)}.log-e .log-msg{color:var(--acc)}
+
+/* URLS TABLE */
+.url-table-wrap{background:var(--s1);border:1px solid var(--b);border-radius:8px;overflow:hidden;display:none}
+.url-table-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--b)}
+.url-table-title{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--m);letter-spacing:1px;text-transform:uppercase}
+.url-filter{padding:5px 10px;background:var(--s2);border:1px solid var(--b);border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t);width:200px}
+.url-filter:focus{outline:none;border-color:var(--g)}
+.url-list{max-height:420px;overflow-y:auto;padding:6px}
+.url-item{display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:5px;margin-bottom:2px;background:var(--s2);transition:background .15s}
+.url-item:hover{background:var(--b2)}
+.url-num{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--m);flex-shrink:0;padding-top:1px;min-width:24px}
+.url-link{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g2);word-break:break-all;text-decoration:none;line-height:1.5;flex:1}
+.url-link:hover{color:var(--g);text-decoration:underline}
+.url-src{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 5px;border-radius:3px;flex-shrink:0;margin-top:1px}
+.url-src.sitemap{background:rgba(0,229,160,.1);color:var(--g)}
+.url-src.crawl{background:rgba(0,184,255,.1);color:var(--g2)}
+.url-src.known{background:rgba(255,209,102,.1);color:var(--acc2)}
+
+/* GLOBAL RESULTS TABLE */
+.global-table{width:100%;border-collapse:collapse;font-size:12px}
+.global-table th{font-family:'IBM Plex Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--m);padding:10px 14px;text-align:left;border-bottom:1px solid var(--b);background:var(--s1);position:sticky;top:0;z-index:5}
+.global-table td{padding:9px 14px;border-bottom:1px solid rgba(30,31,43,.5);vertical-align:top}
+.global-table tr:hover td{background:var(--s2)}
+.td-domain{font-weight:600;font-size:12px}
+.td-count{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--g)}
+.td-count.zero{color:var(--acc)}
+.td-status{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:3px 7px;border-radius:3px}
+.td-status.done{background:rgba(0,229,160,.1);color:var(--g)}
+.td-status.error{background:rgba(255,77,109,.1);color:var(--acc)}
+.td-status.running{background:rgba(0,184,255,.1);color:var(--g2)}
+.td-status.pending{background:rgba(107,112,153,.1);color:var(--m)}
+
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--b);background:var(--s1)}
+.tab{padding:11px 18px;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--m);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab:hover{color:var(--t)}
+.tab.active{color:var(--g);border-bottom-color:var(--g)}
+
+.sp{display:inline-block;width:10px;height:10px;border:2px solid rgba(0,0,0,.2);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:4px}
+
+/* ADD DOMAIN */
+.add-domain{padding:12px 16px;border-bottom:1px solid var(--b);display:flex;gap:6px}
+.add-input{flex:1;padding:7px 10px;background:var(--s2);border:1px solid var(--b);border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--t)}
+.add-input:focus{outline:none;border-color:var(--g)}
+.add-btn{padding:7px 12px;background:var(--b2);border:1px solid var(--b);border-radius:5px;color:var(--g);font-size:12px;cursor:pointer;transition:background .2s}
+.add-btn:hover{background:var(--dim)}
+
+.tag{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 6px;border-radius:2px;letter-spacing:1px}
+.tag.sitemap{background:rgba(0,229,160,.1);color:var(--g)}
+.tag.known{background:rgba(255,209,102,.1);color:var(--acc2)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">PDP<span>·</span>BULK<span>·</span>FINDER</div>
+  <div class="hdr-stat">
+    <div>TOTAL DOMAINS: <b id="hdr-total">0</b> &nbsp;|&nbsp; DONE: <b id="hdr-done">0</b> &nbsp;|&nbsp; PDPs FOUND: <b id="hdr-pdps">0</b></div>
+    <div style="margin-top:3px">CLIENT EDITION · FULLY AUTOMATED</div>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-head">
+      <span class="sb-title">Domains</span>
+      <span class="sb-count" id="sb-count">0 / 0</span>
+    </div>
+
+    <div class="add-domain">
+      <input class="add-input" id="add-input" placeholder="Add domain (e.g. nike.com)">
+      <button class="add-btn" onclick="addDomain()">+ Add</button>
+    </div>
+
+    <div id="domain-list"></div>
+
+    <div class="ctrl">
+      <select id="cnt-select" style="width:100%;margin-bottom:8px;padding:8px;background:var(--s2);border:1px solid var(--b);border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--t)">
+        <option value="25">25 URLs per domain</option>
+        <option value="50" selected>50 URLs per domain</option>
+        <option value="100">100 URLs per domain</option>
+        <option value="200">200 URLs per domain</option>
+      </select>
+      <button class="btn-run" id="btn-run" onclick="runAll()">⚡ RUN ALL DOMAINS</button>
+      <button class="btn-dl" id="btn-dl" onclick="dlAll()" disabled>⬇ DOWNLOAD ALL (EXCEL)</button>
+    </div>
+  </div>
+
+  <!-- MAIN PANEL -->
+  <div class="main" id="main-panel">
+
+    <div class="tab-bar">
+      <div class="tab active" onclick="showTab('overview')" id="tab-overview">Overview</div>
+      <div class="tab" onclick="showTab('detail')" id="tab-detail">Domain Detail</div>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    <div id="pane-overview" style="padding:20px 28px">
+      <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--m);text-transform:uppercase;letter-spacing:1px">All Domains — Status Overview</div>
+      </div>
+      <table class="global-table" id="overview-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Domain</th>
+            <th>Sitemap URLs</th>
+            <th>PDPs Found</th>
+            <th>Source</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="overview-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- DETAIL TAB -->
+    <div id="pane-detail" style="display:none;padding:24px 28px">
+      <div id="detail-content">
+        <div class="empty">
+          <div class="empty-icon">🎯</div>
+          <div class="empty-txt">Click a domain in the sidebar<br>to view detailed results</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+
+/* ══════════════════════════════════════════
+   CLIENT DATA — Pre-loaded from your list
+══════════════════════════════════════════ */
+const CLIENT_DATA = [
+  { domain:'www.freepeople.com', sitemapProducts:'https://www.freepeople.com/fpmovement/products_sitemap.xml', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.shopterrain.com', sitemapProducts:'https://www.shopterrain.com/products_sitemap.xml', sitemapCats:'https://www.shopterrain.com/categories_sitemap.xml', knownPDPs:['https://www.shopterrain.com/shop/rainy-day-duck-felt-critter?color=072','https://www.shopterrain.com/shop/solar-pebble-light?color=010'] },
+  { domain:'www.anthropologie.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.laroche-posay.us', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.lg.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.fragrancenet.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.paulaschoice.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.converse.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'thefivetenshoes.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'cooklist.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'rtfkt.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.dollargeneral.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.clinique.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.bjs.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.ae.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.kiehls.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.theouai.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'electronics.sony.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'oldnavy.gap.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.supergoop.com', sitemapProducts:'https://supergoop.com/sitemap_products_1.xml?from=112965845008&to=7497332162658', sitemapCats:'https://supergoop.com/sitemap_collections_1.xml?from=5691441168&to=291263873122', knownPDPs:['https://supergoop.com/products/city-sunscreen-serum?variant=731871641616','https://supergoop.com/products/play-lip-shield-spf-30'] },
+  { domain:'www.sallybeauty.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.naturemade.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.surlatable.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.garmin.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.dickblick.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.sears.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'shop.asus.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.oxo.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'naturium.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'shop.gnc.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.oreillyauto.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.dior.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.backmarket.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.asics.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.carparts.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.tatcha.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.dermalogica.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.famousfootwear.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.underarmour.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.yesstyle.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+  { domain:'www.flooranddecor.com', sitemapProducts:'', sitemapCats:'', knownPDPs:[] },
+];
+
+/* ══════════════════════════════════════════
+   STATE
+══════════════════════════════════════════ */
+let DOMAINS = []; // {id, domain, sitemapProducts, sitemapCats, knownPDPs, status:'pending|running|done|error', urls:[], logs:[], pipState:{}}
+let SELECTED_ID = null;
+let IS_RUNNING = false;
+const DP = new DOMParser();
+
+function initDomains() {
+  DOMAINS = CLIENT_DATA.map((d, i) => ({
+    id: i,
+    domain: d.domain,
+    sitemapProducts: d.sitemapProducts,
+    sitemapCats: d.sitemapCats,
+    knownPDPs: d.knownPDPs || [],
+    status: 'pending',
+    urls: [],
+    urlSources: {},
+    logs: [],
+    pipState: { R:'', S:'', C:'', Sn:0, Cn:0 },
+    elapsed: 0,
+  }));
+}
+
+/* ══════════════════════════════════════════
+   FETCH — race proxies
+══════════════════════════════════════════ */
+const PX = [
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+];
+function get(url, ms=10000) {
+  return new Promise(res => {
+    let done=false, fails=0;
+    const fin = v => { if(!done){done=true;res(v);} };
+    setTimeout(() => fin(null), ms);
+    PX.forEach(p => {
+      fetch(p(url))
+        .then(r => r.ok ? r.text() : Promise.reject())
+        .then(t => { if(t && t.length > 80) fin(t); else throw 0; })
+        .catch(() => { if(++fails === PX.length) fin(null); });
+    });
+  });
+}
+
+function ab(href, base) {
+  if(!href) return null;
+  href = href.trim();
+  try {
+    if(href.startsWith('http')) return href;
+    if(href.startsWith('//')) return 'https:' + href;
+    return new URL(href, base).href;
+  } catch { return null; }
+}
+
+/* ══════════════════════════════════════════
+   STRICT PDP DETECTION
+══════════════════════════════════════════ */
+const BAD = new Set([
+  'cart','checkout','login','signin','sign-in','register','signup','account',
+  'my-account','profile','orders','order','wishlist','compare','search',
+  'blog','blogs','news','post','posts','article','articles',
+  'about','contact','faq','help','support','policy','policies',
+  'privacy','terms','sitemap','stores','store-locator','store-finder',
+  'track','tracking','gift-card','gift-cards','loyalty','rewards',
+  'refer','affiliate','press','careers','jobs','investors','sustainability',
+  'accessibility','pages','sections','collection','collections',
+  'category','categories','department','departments','brand','brands',
+  'ext','api','cdn-cgi','static','assets','media','images','fonts',
+  'tag','tags','event','events','service','services','class','classes',
+  'engage','user','points','referral','redeem',
+]);
+const BAD_EXT = /\.(jpg|jpeg|png|gif|svg|webp|pdf|zip|css|js|xml|txt|ico|woff|woff2|eot|ttf|mp4|mp3|json)(\?|#|$)/i;
+
+const PDP_RULES = [
+  p => /\/(products?)\//i.test(p.pathname) && p.pathname.split('/').filter(Boolean).length >= 2,
+  p => /\/items?\//i.test(p.pathname),
+  p => /\/dp\/[A-Z0-9]{5,}/i.test(p.pathname),
+  p => /\/pd\/[^\/\s?#]{3,}/i.test(p.pathname),
+  p => /\/detail\/[^\/\s?#]{3,}/i.test(p.pathname),
+  p => /\/sku\/[^\/\s?#]{3,}/i.test(p.pathname),
+  p => /\/collections\/[^\/]+\/products\/[^\/\s?#]{3,}/i.test(p.pathname),
+  p => /\-(\d{6,})(\.html?)?(\?|#|$)/.test(p.pathname) || /\/(\d{7,})(\.html?)?(\?|#|$)/.test(p.pathname),
+  p => /\/[a-z]{2}[_\-][A-Z]{2}\//.test(p.pathname) && p.pathname.split('/').filter(Boolean).length >= 4,
+  p => /[?&](productId|product_id|pid|itemId|skuId|modelNo|partNumber)=[^&\s#]{2,}/i.test(p.search),
+  p => {
+    const segs = p.pathname.split('/').filter(Boolean);
+    return segs.length >= 2 && /^[a-z0-9][a-z0-9\-_]{6,}\.html?$/i.test(segs[segs.length-1]);
+  },
+  p => /\/store\/product\//i.test(p.pathname),
+  p => {
+    const last = p.pathname.split('/').filter(Boolean).pop() || '';
+    return last.length >= 10 && /\-v\-[a-z0-9]/i.test(last) && p.pathname.split('/').filter(Boolean).length >= 2;
+  },
+  p => {
+    const m = p.pathname.match(/\/p\/([^\/\s?#]+)/i);
+    return !!(m && m[1].length >= 4);
+  },
+  // /shop/slug pattern (terrain, anthropologie style)
+  p => {
+    const segs = p.pathname.split('/').filter(Boolean);
+    return segs[0] === 'shop' && segs.length >= 2 && segs[1].length >= 5;
+  },
+];
+
+function isPDP(url, domainHint) {
+  if(!url || typeof url !== 'string') return false;
+  let p; try { p = new URL(url); } catch { return false; }
+  if(domainHint) {
+    const bare = domainHint.replace(/^www\./, '');
+    if(!p.hostname.toLowerCase().includes(bare)) return false;
+  }
+  if(BAD_EXT.test(url)) return false;
+  const segs = p.pathname.split('/').filter(Boolean);
+  if(segs.length < 1) return false;
+  if(segs.some(s => BAD.has(s.toLowerCase()))) return false;
+  return PDP_RULES.some(fn => { try { return fn(p); } catch { return false; } });
+}
+
+/* ══════════════════════════════════════════
+   LOGGING (per domain)
+══════════════════════════════════════════ */
+function dlog(d, msg, t='i') {
+  d.logs.push({ ts: new Date().toLocaleTimeString('en',{hour12:false}), msg, t });
+  // if this domain is selected, append to live log
+  if(SELECTED_ID === d.id) appendLog(d.logs[d.logs.length-1]);
+}
+
+function appendLog(entry) {
+  const b = document.getElementById('live-log');
+  if(!b) return;
+  const div = document.createElement('div');
+  div.className = 'log-line log-' + entry.t;
+  div.innerHTML = `<span class="log-ts">${entry.ts}</span><span class="log-msg">${entry.msg}</span>`;
+  b.appendChild(div);
+  b.scrollTop = b.scrollHeight;
+}
+
+/* ══════════════════════════════════════════
+   SITEMAP — extract locs
+══════════════════════════════════════════ */
+function locsFromXML(txt) {
+  return [...txt.matchAll(/<loc>\s*(.*?)\s*<\/loc>/gis)].map(m => m[1].trim()).filter(l => l.startsWith('http'));
+}
+
+/* ══════════════════════════════════════════
+   PROCESS SINGLE DOMAIN
+══════════════════════════════════════════ */
+async function processDomain(d) {
+  const target = parseInt(document.getElementById('cnt-select').value) || 50;
+  d.status = 'running';
+  d.urls = [];
+  d.urlSources = {};
+  d.logs = [];
+  const t0 = Date.now();
+  const bare = d.domain.replace(/^www\./, '');
+  const bases = ['https://www.' + bare, 'https://' + bare];
+
+  updateSidebarRow(d);
+  updateOverviewRow(d);
+
+  const allURLs = new Set();
+  const sourceMap = {}; // url → 'sitemap'|'crawl'|'known'
+
+  // ── STEP 0: Known PDPs from client data ──
+  if(d.knownPDPs.length) {
+    dlog(d, `Known PDPs from client: ${d.knownPDPs.length}`, 's');
+    d.knownPDPs.forEach(u => { allURLs.add(u); sourceMap[u] = 'known'; });
+  }
+
+  // ── STEP 1: robots.txt ──
+  d.pipState.R = 'run'; updateDetail(d);
+  const robotsSitemaps = [];
+  const rr = await Promise.allSettled(bases.map(b => get(b + '/robots.txt', 6000)));
+  for(const r of rr) {
+    if(r.status !== 'fulfilled' || !r.value) continue;
+    for(const m of r.value.matchAll(/Sitemap:\s*(https?:\/\/[^\s]+)/gi))
+      robotsSitemaps.push(m[1].trim());
+  }
+  const uniqRobotsSmaps = [...new Set(robotsSitemaps)];
+  d.pipState.R = uniqRobotsSmaps.length ? 'ok' : 'fail';
+  dlog(d, `robots.txt → ${uniqRobotsSmaps.length} sitemap(s)`, uniqRobotsSmaps.length ? 's' : 'w');
+  updateDetail(d);
+
+  // ── STEP 2: Sitemaps ──
+  d.pipState.S = 'run'; updateDetail(d);
+  const PATHS = ['/sitemap.xml','/sitemap_index.xml','/sitemap-products.xml','/sitemap_products.xml','/product-sitemap.xml','/sitemap/products.xml','/sitemap-product.xml','/sitemaps/sitemap.xml','/sitemap-1.xml'];
+  
+  // Priority: known sitemaps from client data, then robots, then standard paths
+  const knownSitemaps = [d.sitemapProducts, d.sitemapCats].filter(Boolean);
+  const cands = new Set([...knownSitemaps, ...uniqRobotsSmaps, ...bases.flatMap(b => PATHS.map(p => b + p))]);
+  dlog(d, `Checking ${cands.size} sitemap candidates…`);
+
+  const smRes = await Promise.allSettled([...cands].map(u => get(u, 8000)));
+  const caArr = [...cands];
+  let subs = [], directPDPs = [];
+
+  for(let i = 0; i < smRes.length; i++) {
+    const r = smRes[i]; if(r.status !== 'fulfilled' || !r.value) continue;
+    const txt = r.value; if(txt.length < 30) continue;
+    if(/<sitemapindex/i.test(txt)) {
+      const locs = locsFromXML(txt);
+      dlog(d, `Index ${caArr[i].split('/').pop()} → ${locs.length} sub-sitemaps`);
+      subs.push(...locs);
+    } else if(/<urlset|<loc>/i.test(txt)) {
+      const locs = locsFromXML(txt);
+      const pdps = locs.filter(u => isPDP(u, d.domain));
+      if(pdps.length) { dlog(d, `${caArr[i].split('/').pop()} → ${pdps.length} PDPs`, 's'); directPDPs.push(...pdps); }
+      else if(locs.length) {
+        // slug fallback
+        const fb = locs.filter(u => {
+          try {
+            const seg = new URL(u).pathname.split('/').filter(Boolean);
+            if(seg.length < 2) return false;
+            if(seg.some(s => BAD.has(s.toLowerCase()))) return false;
+            const last = seg[seg.length-1];
+            return last.length >= 8 && /[a-z]/i.test(last) && /-/.test(last);
+          } catch { return false; }
+        });
+        if(fb.length) { dlog(d, `  slug fallback: ${fb.length}`, 'w'); directPDPs.push(...fb.slice(0, 100)); }
+        else dlog(d, `${caArr[i].split('/').pop()} → 0 PDP. Sample: ${locs[0]||'-'}`, 'w');
+      }
+    }
+  }
+
+  // Sub-sitemaps
+  const uniqSubs = [...new Set(subs)];
+  if(uniqSubs.length) {
+    dlog(d, `Fetching ${Math.min(uniqSubs.length, 14)} sub-sitemaps…`);
+    const sr = await Promise.allSettled(uniqSubs.slice(0, 14).map(u => get(u, 10000)));
+    for(let i = 0; i < sr.length; i++) {
+      const r = sr[i]; if(r.status !== 'fulfilled' || !r.value) continue;
+      if(/<sitemapindex/i.test(r.value)) {
+        const more = locsFromXML(r.value);
+        const dr = await Promise.allSettled(more.slice(0,5).map(u => get(u, 10000)));
+        for(const d2 of dr) { if(d2.status === 'fulfilled' && d2.value) directPDPs.push(...locsFromXML(d2.value).filter(u => isPDP(u, d.domain))); }
+        continue;
+      }
+      const locs = locsFromXML(r.value);
+      const pdps = locs.filter(u => isPDP(u, d.domain));
+      if(pdps.length) { dlog(d, `Sub ${i+1} → ${pdps.length} PDPs`, 's'); directPDPs.push(...pdps); }
+      else {
+        const fb = locs.filter(u => { try { const seg=new URL(u).pathname.split('/').filter(Boolean); return seg.length>=2 && !seg.some(s=>BAD.has(s.toLowerCase())) && (seg[seg.length-1]||'').length>=8 && /-/.test(seg[seg.length-1]); } catch{return false;} });
+        if(fb.length) directPDPs.push(...fb.slice(0,80));
+      }
+    }
+  }
+
+  directPDPs.forEach(u => { allURLs.add(u); if(!sourceMap[u]) sourceMap[u] = 'sitemap'; });
+  d.pipState.Sn = directPDPs.length;
+  d.pipState.S = directPDPs.length ? 'ok' : 'fail';
+  dlog(d, `Sitemap total: ${directPDPs.length} PDPs`, directPDPs.length ? 's' : 'w');
+  updateDetail(d);
+
+  // ── STEP 3: Crawl (if needed) ──
+  d.pipState.C = 'run'; updateDetail(d);
+  const homeURLs = [...bases.map(b => b), ...bases];
+  let homeHTML = null, successBase = bases[0];
+  for(const u of homeURLs) {
+    homeHTML = await get(u, 9000);
+    if(homeHTML) { successBase = u.replace(/\/$/, ''); break; }
+  }
+
+  let crawlHits = [];
+  if(homeHTML) {
+    const homeDoc = DP.parseFromString(homeHTML, 'text/html');
+    const homeHits = extractFromDoc(homeDoc, successBase, d.domain);
+    homeHits.forEach(u => { allURLs.add(u); if(!sourceMap[u]) sourceMap[u] = 'crawl'; });
+    crawlHits.push(...homeHits);
+    dlog(d, `Homepage: ${homeHits.length} PDPs`, homeHits.length ? 's' : 'w');
+
+    const toVisit = new Set();
+    homeDoc.querySelectorAll('a[href]').forEach(a => {
+      const u = ab(a.getAttribute('href'), successBase);
+      if(!u || !u.includes(bare) || isPDP(u, d.domain) || BAD_EXT.test(u)) return;
+      try {
+        const segs = new URL(u).pathname.split('/').filter(Boolean);
+        if(!segs.length || segs.some(s => BAD.has(s.toLowerCase()))) return;
+        toVisit.add(u);
+      } catch {}
+    });
+    const targets = [...toVisit].slice(0, 14);
+    dlog(d, `Crawling ${targets.length} pages…`);
+    const cr = await Promise.allSettled(targets.map(u => get(u, 8000).then(html => html ? extractFromDoc(DP.parseFromString(html,'text/html'), successBase, d.domain) : [])));
+    for(const r of cr) if(r.status === 'fulfilled') r.value.forEach(u => { allURLs.add(u); if(!sourceMap[u]) sourceMap[u]='crawl'; crawlHits.push(u); });
+  }
+
+  d.pipState.Cn = crawlHits.length;
+  d.pipState.C = crawlHits.length ? 'ok' : 'fail';
+  dlog(d, `Crawl total: ${crawlHits.length} PDPs`, crawlHits.length ? 's' : 'w');
+
+  // ── FINALIZE ──
+  const merged = [...allURLs];
+  dlog(d, `Total unique PDPs: ${merged.length}`, merged.length ? 's' : 'e');
+  const selected = diversify(merged, target);
+  d.urls = selected;
+  d.urlSources = sourceMap;
+  d.elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  d.status = merged.length ? 'done' : 'error';
+  dlog(d, `✅ ${selected.length} PDP URLs ready (${d.elapsed}s)`, selected.length ? 's' : 'e');
+
+  updateSidebarRow(d);
+  updateOverviewRow(d);
+  updateHeaderStats();
+  if(SELECTED_ID === d.id) renderDetail(d);
+
+  return d;
+}
+
+/* ══════════════════════════════════════════
+   EXTRACT FROM HTML DOC
+══════════════════════════════════════════ */
+function extractFromDoc(doc, base, domainHint) {
+  const s = new Set();
+  doc.querySelectorAll('a[href]').forEach(a => {
+    const u = ab(a.getAttribute('href'), base);
+    if(u && isPDP(u, domainHint)) s.add(u);
+  });
+  doc.querySelectorAll('script[type="application/ld+json"]').forEach(el => {
+    try { digLD(JSON.parse(el.textContent), s, base, domainHint); } catch {}
+  });
+  doc.querySelectorAll('script:not([src])').forEach(el => {
+    const t = el.textContent;
+    if(!t || t.length < 50 || t.length > 700000) return;
+    for(const m of t.matchAll(/"(https?:\/\/[^"\s<>]{12,260})"/g))
+      if(isPDP(m[1], domainHint)) s.add(m[1]);
+    for(const m of t.matchAll(/"(\/[a-zA-Z0-9%_\-/.]{5,200})"/g)) {
+      const u = ab(m[1], base);
+      if(u && isPDP(u, domainHint)) s.add(u);
+    }
+  });
+  return [...s];
+}
+
+function digLD(d, s, base, domainHint) {
+  if(!d) return;
+  if(Array.isArray(d)) { d.forEach(x => digLD(x, s, base, domainHint)); return; }
+  if(d['@type'] === 'Product') {
+    if(d.url){const u=ab(d.url,base);if(u&&isPDP(u,domainHint))s.add(u);}
+    [d.offers].flat().filter(Boolean).forEach(o => { if(o&&o.url){const u=ab(o.url,base);if(u&&isPDP(u,domainHint))s.add(u);} });
+  }
+  if(d['@type']==='ItemList'&&d.itemListElement) {
+    [d.itemListElement].flat().forEach(i => {
+      const u1=i&&ab(i.url,base);if(u1&&isPDP(u1,domainHint))s.add(u1);
+      const u2=i&&i.item&&ab(i.item.url,base);if(u2&&isPDP(u2,domainHint))s.add(u2);
+    });
+  }
+  if(d['@graph']) digLD(d['@graph'], s, base, domainHint);
+  if(d.mainEntity) digLD(d.mainEntity, s, base, domainHint);
+}
+
+/* ══════════════════════════════════════════
+   DIVERSIFY
+══════════════════════════════════════════ */
+function diversify(urls, n) {
+  const g = {};
+  urls.forEach(url => {
+    try {
+      const cat = new URL(url).pathname.split('/').filter(Boolean)[0] || '_';
+      if(!g[cat]) g[cat] = [];
+      g[cat].push(url);
+    } catch {}
+  });
+  const cats = Object.keys(g);
+  const res = []; let round = 0;
+  while(res.length < n) {
+    let added = 0;
+    for(const c of cats) {
+      if(res.length >= n) break;
+      if(round < g[c].length) { res.push(g[c][round]); added++; }
+    }
+    if(!added) break;
+    round++;
+  }
+  return res.slice(0, n);
+}
+
+/* ══════════════════════════════════════════
+   RUN ALL
+══════════════════════════════════════════ */
+async function runAll() {
+  if(IS_RUNNING) return;
+  IS_RUNNING = true;
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('btn-run').innerHTML = '<span class="sp"></span>RUNNING…';
+
+  // Process 3 domains concurrently
+  const CONCURRENCY = 3;
+  let i = 0;
+  const queue = DOMAINS.filter(d => d.status === 'pending');
+
+  async function worker() {
+    while(i < queue.length) {
+      const d = queue[i++];
+      await processDomain(d);
+    }
+  }
+
+  const workers = Array.from({length: Math.min(CONCURRENCY, queue.length)}, worker);
+  await Promise.all(workers);
+
+  IS_RUNNING = false;
+  document.getElementById('btn-run').disabled = false;
+  document.getElementById('btn-run').textContent = '⚡ RE-RUN ALL';
+  document.getElementById('btn-dl').disabled = false;
+  updateHeaderStats();
+}
+
+/* ══════════════════════════════════════════
+   DOWNLOAD ALL EXCEL
+══════════════════════════════════════════ */
+function dlAll() {
+  const wb = XLSX.utils.book_new();
+  // Summary sheet
+  const summaryData = DOMAINS.map((d, i) => ({
+    '#': i+1,
+    'Domain': d.domain,
+    'PDPs Found': d.urls.length,
+    'Status': d.status,
+    'Time (s)': d.elapsed || '-',
+    'Sitemap URL (Products)': d.sitemapProducts || '-',
+    'Sitemap URL (Categories)': d.sitemapCats || '-',
+  }));
+  const ws0 = XLSX.utils.json_to_sheet(summaryData);
+  ws0['!cols'] = [{wch:4},{wch:30},{wch:12},{wch:10},{wch:10},{wch:70},{wch:70}];
+  XLSX.utils.book_append_sheet(wb, ws0, 'Summary');
+
+  // All URLs sheet
+  const allData = [];
+  DOMAINS.forEach(d => {
+    d.urls.forEach((url, i) => {
+      allData.push({'Domain': d.domain, '#': i+1, 'Product URL': url, 'Source': d.urlSources[url] || '-', 'Status':'Pending','Notes':''});
+    });
+  });
+  const ws1 = XLSX.utils.json_to_sheet(allData);
+  ws1['!cols'] = [{wch:28},{wch:4},{wch:100},{wch:10},{wch:12},{wch:25}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'All PDP URLs');
+
+  // Per-domain sheets
+  DOMAINS.filter(d => d.urls.length).forEach(d => {
+    const sname = d.domain.replace(/^www\./,'').replace(/[^a-z0-9]/gi,'_').slice(0,28);
+    const wsD = XLSX.utils.json_to_sheet(d.urls.map((url,i) => ({'#':i+1,'Product URL':url,'Source':d.urlSources[url]||'-','Status':'Pending','Notes':''})));
+    wsD['!cols'] = [{wch:4},{wch:100},{wch:10},{wch:12},{wch:25}];
+    XLSX.utils.book_append_sheet(wb, wsD, sname);
+  });
+
+  XLSX.writeFile(wb, `client_pdp_urls_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+/* ══════════════════════════════════════════
+   ADD DOMAIN
+══════════════════════════════════════════ */
+function addDomain() {
+  const raw = document.getElementById('add-input').value.trim();
+  if(!raw) return;
+  const domain = raw.replace(/^https?:\/\//i,'').replace(/^www\./,'').split('/')[0].toLowerCase();
+  if(DOMAINS.find(d => d.domain === domain || d.domain === 'www.'+domain)) {
+    alert('Domain already in list!');
+    return;
+  }
+  const newD = {
+    id: DOMAINS.length,
+    domain: 'www.' + domain,
+    sitemapProducts: '',
+    sitemapCats: '',
+    knownPDPs: [],
+    status: 'pending',
+    urls: [],
+    urlSources: {},
+    logs: [],
+    pipState: { R:'', S:'', C:'', Sn:0, Cn:0 },
+    elapsed: 0,
+  };
+  DOMAINS.push(newD);
+  document.getElementById('add-input').value = '';
+  renderSidebar();
+  renderOverviewTable();
+  updateHeaderStats();
+}
+
+/* ══════════════════════════════════════════
+   UI RENDERING
+══════════════════════════════════════════ */
+function renderSidebar() {
+  const el = document.getElementById('domain-list');
+  el.innerHTML = '';
+  DOMAINS.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'domain-row ' + d.status;
+    row.id = 'drow-' + d.id;
+    row.onclick = () => selectDomain(d.id);
+    const badge = d.status === 'done' ? `<span class="d-badge count">${d.urls.length}</span>` :
+                  d.status === 'running' ? `<span class="d-badge run">…</span>` :
+                  d.status === 'error' ? `<span class="d-badge err">0</span>` : '';
+    const tags = (d.sitemapProducts ? '<span class="tag sitemap">SM</span> ' : '') + (d.knownPDPs.length ? '<span class="tag known">KP</span>' : '');
+    row.innerHTML = `
+      <div class="d-indicator"></div>
+      <div class="d-info">
+        <div class="d-name">${d.domain}</div>
+        <div class="d-sub">${tags || 'auto-discover'}</div>
+      </div>
+      ${badge}
+    `;
+    el.appendChild(row);
+  });
+  document.getElementById('sb-count').textContent = `${DOMAINS.filter(d=>d.status==='done').length} / ${DOMAINS.length}`;
+}
+
+function updateSidebarRow(d) {
+  const row = document.getElementById('drow-' + d.id);
+  if(!row) { renderSidebar(); return; }
+  row.className = 'domain-row ' + d.status + (SELECTED_ID === d.id ? ' active' : '');
+  const badge = d.status === 'done' ? `<span class="d-badge count">${d.urls.length}</span>` :
+                d.status === 'running' ? `<span class="d-badge run">…</span>` :
+                d.status === 'error' ? `<span class="d-badge err">0</span>` : '';
+  const tags = (d.sitemapProducts ? '<span class="tag sitemap">SM</span> ' : '') + (d.knownPDPs.length ? '<span class="tag known">KP</span>' : '');
+  row.innerHTML = `
+    <div class="d-indicator"></div>
+    <div class="d-info">
+      <div class="d-name">${d.domain}</div>
+      <div class="d-sub">${tags || 'auto-discover'}</div>
+    </div>
+    ${badge}
+  `;
+  document.getElementById('sb-count').textContent = `${DOMAINS.filter(d=>d.status==='done').length} / ${DOMAINS.length}`;
+}
+
+function renderOverviewTable() {
+  const tbody = document.getElementById('overview-tbody');
+  tbody.innerHTML = '';
+  DOMAINS.forEach((d, i) => {
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.onclick = () => selectDomain(d.id);
+    tr.id = 'orow-' + d.id;
+    const statusCls = d.status;
+    const src = d.sitemapProducts ? `<span class="tag sitemap">Sitemap</span>` : d.knownPDPs.length ? `<span class="tag known">Known</span>` : `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--m)">Auto</span>`;
+    tr.innerHTML = `
+      <td style="color:var(--m);font-family:'IBM Plex Mono',monospace;font-size:11px">${String(i+1).padStart(2,'0')}</td>
+      <td class="td-domain">${d.domain}</td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--m)">${d.sitemapProducts ? '✓' : '—'}</td>
+      <td class="td-count ${d.urls.length===0&&d.status==='done'?'zero':''}">${d.status==='pending'?'—':d.urls.length}</td>
+      <td>${src}</td>
+      <td><span class="td-status ${statusCls}">${d.status.toUpperCase()}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateOverviewRow(d) {
+  const tr = document.getElementById('orow-' + d.id);
+  if(!tr) { renderOverviewTable(); return; }
+  const statusCls = d.status;
+  const src = d.sitemapProducts ? `<span class="tag sitemap">Sitemap</span>` : d.knownPDPs.length ? `<span class="tag known">Known</span>` : `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--m)">Auto</span>`;
+  tr.innerHTML = `
+    <td style="color:var(--m);font-family:'IBM Plex Mono',monospace;font-size:11px">${String(DOMAINS.indexOf(d)+1).padStart(2,'0')}</td>
+    <td class="td-domain">${d.domain}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--m)">${d.sitemapProducts ? '✓' : '—'}</td>
+    <td class="td-count ${d.urls.length===0&&d.status==='done'?'zero':''}">${d.status==='pending'?'—':d.urls.length}</td>
+    <td>${src}</td>
+    <td><span class="td-status ${statusCls}">${d.status.toUpperCase()}</span></td>
+  `;
+}
+
+function updateHeaderStats() {
+  const total = DOMAINS.length;
+  const done = DOMAINS.filter(d => d.status === 'done' || d.status === 'error').length;
+  const pdps = DOMAINS.reduce((a, d) => a + d.urls.length, 0);
+  document.getElementById('hdr-total').textContent = total;
+  document.getElementById('hdr-done').textContent = done;
+  document.getElementById('hdr-pdps').textContent = pdps;
+}
+
+function selectDomain(id) {
+  SELECTED_ID = id;
+  document.querySelectorAll('.domain-row').forEach(r => r.classList.remove('active'));
+  const row = document.getElementById('drow-' + id);
+  if(row) row.classList.add('active');
+  showTab('detail');
+  renderDetail(DOMAINS.find(d => d.id === id));
+}
+
+function renderDetail(d) {
+  const el = document.getElementById('detail-content');
+  if(!d) return;
+
+  const sitemapInfo = [
+    d.sitemapProducts ? `<div style="margin-top:4px"><span class="tag sitemap">Products SM</span> <a href="${d.sitemapProducts}" target="_blank" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g2);text-decoration:none">${d.sitemapProducts.slice(0,70)}…</a></div>` : '',
+    d.sitemapCats ? `<div style="margin-top:4px"><span class="tag sitemap">Categories SM</span> <a href="${d.sitemapCats}" target="_blank" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g2);text-decoration:none">${d.sitemapCats.slice(0,70)}…</a></div>` : '',
+    d.knownPDPs.length ? `<div style="margin-top:4px"><span class="tag known">Known PDPs</span> <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--m)">${d.knownPDPs.length} sample(s) provided</span></div>` : '',
+  ].filter(Boolean).join('');
+
+  const pip = d.pipState;
+  el.innerHTML = `
+    <div class="det-head">
+      <div>
+        <div class="det-title"><span>${d.domain.replace(/^www\./,'')}</span></div>
+        <div class="det-meta">
+          ${sitemapInfo || '<span style="color:var(--m)">No sitemap provided — auto-discover mode</span>'}
+        </div>
+      </div>
+      <div>
+        ${d.status === 'done' || d.status === 'error' ? `<button onclick="rerunDomain(${d.id})" style="padding:8px 14px;background:transparent;border:1px solid var(--b2);border-radius:5px;color:var(--m);font-size:12px;cursor:pointer">↺ Re-run</button>` : ''}
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-n">${d.urls.length}</div>
+        <div class="stat-l">PDPs Found</div>
+      </div>
+      <div class="stat-box ${d.pipState.Sn===0?'warn':''}">
+        <div class="stat-n">${d.pipState.Sn||0}</div>
+        <div class="stat-l">From Sitemap</div>
+      </div>
+      <div class="stat-box ${d.pipState.Cn===0?'warn':''}">
+        <div class="stat-n">${d.pipState.Cn||0}</div>
+        <div class="stat-l">From Crawl</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-n">${d.elapsed||'—'}</div>
+        <div class="stat-l">Seconds</div>
+      </div>
+    </div>
+
+    <div class="pipeline">
+      <div class="pip-step ${pip.R||''}"><div class="pip-icon">🤖</div><div class="pip-name">robots.txt</div><div class="pip-val">${pip.R==='ok'?'✓':pip.R==='fail'?'✗':'…'}</div></div>
+      <div class="pip-step ${pip.S||''}"><div class="pip-icon">🗺️</div><div class="pip-name">Sitemap</div><div class="pip-val">${pip.Sn||0}</div></div>
+      <div class="pip-step ${pip.C||''}"><div class="pip-icon">🕷️</div><div class="pip-name">Crawl</div><div class="pip-val">${pip.Cn||0}</div></div>
+    </div>
+
+    <div class="log-wrap" id="log-wrap" style="display:${d.logs.length?'block':'none'}">
+      <div class="log-head">
+        <div class="dot" style="background:#ff5f57"></div>
+        <div class="dot" style="background:#ffbd2e"></div>
+        <div class="dot" style="background:#28c840"></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--m);margin-left:6px">log · ${d.domain}</span>
+      </div>
+      <div class="log-body" id="live-log"></div>
+    </div>
+
+    <div class="url-table-wrap" id="url-table-wrap" style="display:${d.urls.length?'block':'none'}">
+      <div class="url-table-head">
+        <span class="url-table-title">${d.urls.length} Product Page URLs</span>
+        <input class="url-filter" id="url-filter" placeholder="Filter URLs…" oninput="filterURLs('${d.id}')">
+      </div>
+      <div class="url-list" id="url-list-body"></div>
+    </div>
+  `;
+
+  // Populate logs
+  const lb = document.getElementById('live-log');
+  if(lb) {
+    d.logs.forEach(entry => {
+      const div = document.createElement('div');
+      div.className = 'log-line log-' + entry.t;
+      div.innerHTML = `<span class="log-ts">${entry.ts}</span><span class="log-msg">${entry.msg}</span>`;
+      lb.appendChild(div);
+    });
+    lb.scrollTop = lb.scrollHeight;
+  }
+  if(d.logs.length) document.getElementById('log-wrap').style.display = 'block';
+
+  // Populate URLs
+  if(d.urls.length) {
+    document.getElementById('url-table-wrap').style.display = 'block';
+    renderURLList(d, d.urls);
+  }
+}
+
+function updateDetail(d) {
+  if(SELECTED_ID === d.id) {
+    const pip = d.pipState;
+    // update pipeline
+    const steps = document.querySelectorAll('.pip-step');
+    if(steps.length >= 3) {
+      steps[0].className = 'pip-step ' + (pip.R||'');
+      steps[0].querySelector('.pip-val').textContent = pip.R==='ok'?'✓':pip.R==='fail'?'✗':'…';
+      steps[1].className = 'pip-step ' + (pip.S||'');
+      steps[1].querySelector('.pip-val').textContent = pip.Sn||0;
+      steps[2].className = 'pip-step ' + (pip.C||'');
+      steps[2].querySelector('.pip-val').textContent = pip.Cn||0;
+    }
+    if(d.logs.length) { const lw=document.getElementById('log-wrap'); if(lw) lw.style.display='block'; }
+    if(d.urls.length) {
+      const uw=document.getElementById('url-table-wrap'); if(uw) uw.style.display='block';
+      renderURLList(d, d.urls);
+      // update stats
+      const sn = document.querySelectorAll('.stat-n');
+      if(sn.length >= 4) { sn[0].textContent=d.urls.length; sn[1].textContent=d.pipState.Sn||0; sn[2].textContent=d.pipState.Cn||0; sn[3].textContent=d.elapsed||'—'; }
+    }
+  }
+}
+
+function renderURLList(d, urls) {
+  const el = document.getElementById('url-list-body');
+  if(!el) return;
+  el.innerHTML = '';
+  urls.forEach((url, i) => {
+    const src = d.urlSources[url] || 'crawl';
+    const div = document.createElement('div');
+    div.className = 'url-item';
+    div.innerHTML = `
+      <span class="url-num">${String(i+1).padStart(2,'0')}</span>
+      <a class="url-link" href="${url}" target="_blank" rel="noopener">${url}</a>
+      <span class="url-src ${src}">${src}</span>
+    `;
+    el.appendChild(div);
+  });
+}
+
+function filterURLs(domainId) {
+  const d = DOMAINS.find(x => x.id == domainId);
+  if(!d) return;
+  const q = document.getElementById('url-filter').value.toLowerCase();
+  const filtered = q ? d.urls.filter(u => u.toLowerCase().includes(q)) : d.urls;
+  renderURLList(d, filtered);
+}
+
+function rerunDomain(id) {
+  const d = DOMAINS.find(x => x.id === id);
+  if(!d || IS_RUNNING) return;
+  d.status = 'pending';
+  updateSidebarRow(d);
+  updateOverviewRow(d);
+  processDomain(d);
+}
+
+function showTab(t) {
+  document.getElementById('pane-overview').style.display = t==='overview'?'block':'none';
+  document.getElementById('pane-detail').style.display = t==='detail'?'block':'none';
+  document.getElementById('tab-overview').className = 'tab' + (t==='overview'?' active':'');
+  document.getElementById('tab-detail').className = 'tab' + (t==='detail'?' active':'');
+}
+
+/* ══════════════════════════════════════════
+   INIT
+══════════════════════════════════════════ */
+initDomains();
+renderSidebar();
+renderOverviewTable();
+updateHeaderStats();
+
+document.getElementById('add-input').addEventListener('keypress', e => { if(e.key==='Enter') addDomain(); });
+
+</script>
+</body>
+</html>
